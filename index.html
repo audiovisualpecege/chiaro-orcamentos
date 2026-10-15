@@ -366,7 +366,7 @@ a.bh-linha:hover, .bh-linha:hover { background: var(--surface-2); text-decoratio
 <body>
 <div id="raiz"></div>
 <script>
-const VERSAO_GAS = "2026.10.15-1210 (web)";
+const VERSAO_GAS = "2026.10.15-1509 (web)";
 const API_URL = "https://script.google.com/macros/s/AKfycbwwS5gqRm7_v6P9Y-7RjCgyxwcr9Np_yMh7_OkyMee7Qg4CCkDnUh9yQN2p2ohTWE9k/exec";
 
 // armazenamento do navegador pode estar bloqueado dentro do quadro do Google: troca por memória
@@ -699,13 +699,13 @@ async function req(metodo, url, corpo) {
 }
 const pedir = req;
 
-const db = { config: null, servicos: [], pessoas: [], orcamentos: [], clientes: [], historico: [] };
+const db = { config: null, servicos: [], pessoas: [], orcamentos: [], clientes: [], historico: [], responsaveis: [] };
 
 async function carregarTudo() {
   const t = await req('GET', '/api/tudo');
   Object.assign(db, {
     config: t.config, servicos: t.servicos || [], pessoas: t.pessoas || [], orcamentos: t.orcamentos || [],
-    clientes: t.clientes || [], historico: t.historico || [],
+    clientes: t.clientes || [], historico: t.historico || [], responsaveis: t.responsaveis || [],
   });
 }
 
@@ -1922,15 +1922,17 @@ function barrasH(rows, { vazio = 'Sem dados no período.' } = {}) {
     </${r.link ? 'a' : 'div'}>`).join('')}</div>`;
 }
 
-/** Colunas verticais em SVG. series: [{nome, cor, valores[]}], rotulos[] */
-function colunas(rotulos, series, { altura = 220, formato = k, rotuloValor = true, tips = [] } = {}) {
+/** Colunas verticais em SVG. series: [{nome, cor, valores[]}], rotulos[]
+ *  eixo: textos do eixo (vazio = sem texto naquela coluna); divisores: índices com linha vertical antes da coluna */
+function colunas(rotulos, series, { altura = 220, formato = k, rotuloValor = true, tips = [], eixo = rotulos, divisores = [] } = {}) {
   if (!rotulos.length) return '<p class="muted small">Sem dados no período.</p>';
   const L = 760, topo = 22, base = altura - 26, esq = 4;
   const max = Math.max(...series.flatMap((s) => s.valores), 1);
   const grupo = (L - esq) / rotulos.length;
-  const larg = Math.min(44, (grupo - 10) / series.length - 2);
+  const larg = Math.max(1.5, Math.min(44, (grupo * (series.length > 1 ? 0.8 : 0.68)) / series.length - (series.length > 1 ? 2 : 0)));
   const y = (v) => base - ((base - topo) * v) / max;
-  const grades = [0.25, 0.5, 0.75, 1].map((f) => `<line x1="0" x2="${L}" y1="${y(max * f)}" y2="${y(max * f)}" class="grade"/>`).join('');
+  const grades = [0.25, 0.5, 0.75, 1].map((f) => `<line x1="0" x2="${L}" y1="${y(max * f)}" y2="${y(max * f)}" class="grade"/>`).join('')
+    + divisores.map((i) => `<line x1="${esq + i * grupo}" x2="${esq + i * grupo}" y1="${topo - 10}" y2="${base}" class="grade"/>`).join('');
   const barras = rotulos.map((rot, i) => {
     const x0 = esq + i * grupo + (grupo - (larg + 2) * series.length) / 2;
     const bs = series.map((s, j) => {
@@ -1943,8 +1945,8 @@ function colunas(rotulos, series, { altura = 220, formato = k, rotuloValor = tru
       return `<path d="${d}" fill="${s.cor}"/>${lbl}`;
     }).join('');
     const tip = tips[i] || `${rot}: ${series.map((s) => `${s.nome} ${formato(s.valores[i] || 0)}`).join(' · ')}`;
-    return `<g class="col" data-tip="${esc(tip)}"><rect x="${esq + i * grupo}" y="${topo - 10}" width="${grupo}" height="${base - topo + 10}" fill="transparent"/>${bs}
-      <text x="${esq + i * grupo + grupo / 2}" y="${altura - 8}" text-anchor="middle" class="eixo">${esc(rot)}</text></g>`;
+    const txt = eixo[i] ? `<text x="${esq + i * grupo + grupo / 2}" y="${altura - 8}" text-anchor="middle" class="eixo">${esc(eixo[i])}</text>` : '';
+    return `<g class="col" data-tip="${esc(tip)}"><rect x="${esq + i * grupo}" y="${topo - 10}" width="${grupo}" height="${base - topo + 10}" fill="transparent"/>${bs}${txt}</g>`;
   }).join('');
   const legenda = series.length > 1 ? `<div class="legenda">${series.map((s) => `<span><i style="background:${s.cor}"></i>${esc(s.nome)}</span>`).join('')}</div>` : '';
   return `${legenda}<svg viewBox="0 0 ${L} ${altura}" class="grafico" role="img">${grades}<line x1="0" x2="${L}" y1="${base}" y2="${base}" class="eixo-base"/>${barras}</svg>`;
@@ -1967,10 +1969,33 @@ function telaDashboard(el) {
   const parciais = [...agrupar(todos, 'ano').entries()].filter(([, rs]) => rs.length < 15).map(([a]) => a).sort();
   const fora = foraDosTotais();
 
-  // por mês no período filtrado
-  const meses = [...agrupar(lista.filter((r) => r.mes), 'mes').entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  // por mês no período filtrado; meses sem orçamento entram vazios para o eixo do tempo ficar contínuo
+  const porMes = agrupar(lista.filter((r) => /^\d{4}-\d{2}$/.test(r.mes)), 'mes');
+  const chavesMes = [...porMes.keys()].sort();
+  const meses = [];
+  if (chavesMes.length) {
+    let [a, m] = chavesMes[0].split('-').map(Number);
+    const [af, mf] = chavesMes.at(-1).split('-').map(Number);
+    while (a < af || (a === af && m <= mf)) {
+      const c = `${a}-${String(m).padStart(2, '0')}`;
+      meses.push([c, porMes.get(c) || []]);
+      if (++m > 12) { m = 1; a++; }
+    }
+  }
   const nomesMes = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const rotMes = (m) => `${nomesMes[+m.slice(5, 7) - 1]}${filtroAno ? '' : '/' + m.slice(2, 4)}`;
+  // com muitos meses, o eixo mostra só alguns (trimestres ou semestres), com o ano em janeiro e no primeiro rótulo
+  const passoMes = meses.length <= 14 ? 1 : meses.length <= 30 ? 3 : 6;
+  let jaRotulou = false;
+  const eixoMes = meses.map(([m]) => {
+    const mm = +m.slice(5, 7);
+    if (passoMes === 1) return rotMes(m);
+    if ((mm - 1) % passoMes) return '';
+    const comAno = mm === 1 || !jaRotulou;
+    jaRotulou = true;
+    return comAno && !filtroAno ? `${nomesMes[mm - 1]}/${m.slice(2, 4)}` : nomesMes[mm - 1];
+  });
+  const viradasAno = passoMes > 1 ? meses.map(([m], i) => (i && m.endsWith('-01') ? i : -1)).filter((i) => i > 0) : [];
 
   const porTipo = [...agrupar(lista, 'tipo').entries()].map(([t, rs]) => ({ t, ...resumo(rs) })).sort((a, b) => b.fechado - a.fechado || b.n - a.n);
   const faixas = FAIXAS.map(([a, b, nome]) => ({ nome, ...resumo(lista.filter((r) => r.valor >= a && r.valor < b && r.valor > 0)) }));
@@ -2007,14 +2032,14 @@ function telaDashboard(el) {
       <div class="card span-dash">
         <div class="card-titulo"><h2>${icone('grafico')}Orçamentos por mês${filtroAno ? ' em ' + filtroAno : ''}</h2><span class="small muted">quantidade · passe o mouse para valores</span></div>
         ${colunas(meses.map(([m]) => rotMes(m)), [{ nome: 'Orçamentos', cor: 'var(--serie-u)', valores: meses.map(([, rs]) => rs.length) }],
-          { formato: (v) => String(v), rotuloValor: meses.length <= 14, altura: 200,
+          { formato: (v) => String(v), rotuloValor: meses.length <= 14, altura: 200, eixo: eixoMes, divisores: viradasAno,
             tips: meses.map(([m, rs]) => { const x = resumo(rs); return `${rotMes(m)}${filtroAno ? '/' + m.slice(0, 4) : ''}: ${x.n} orçamentos · orçado ${brl(x.orcado)} · fechado ${brl(x.fechado)}`; }) })}
       </div>
 
       <div class="card span-dash">
         <div class="card-titulo"><h2>${icone('grafico')}Fechados por mês${filtroAno ? ' em ' + filtroAno : ''}</h2><span class="small muted">valor fechado · mês do orçamento · passe o mouse para detalhes</span></div>
         ${colunas(meses.map(([m]) => rotMes(m)), [{ nome: 'Fechado', cor: 'var(--serie-3)', valores: meses.map(([, rs]) => resumo(rs).fechado) }],
-          { formato: curto, rotuloValor: meses.length <= 14, altura: 200,
+          { formato: curto, rotuloValor: meses.length <= 14, altura: 200, eixo: eixoMes, divisores: viradasAno,
             tips: meses.map(([m, rs]) => { const x = resumo(rs); return `${rotMes(m)}${filtroAno ? '/' + m.slice(0, 4) : ''}: ${x.ganhos} fechado(s) · ${brl(x.fechado)}${x.ganhos ? ' · ticket ' + brl(x.fechado / x.ganhos) : ''}`; }) })}
       </div>
 
@@ -2189,6 +2214,9 @@ async function telaEditor(el, id) {
   orc.itens ||= [];
   orc.equipe ||= [];
   const abertos = new Set();
+  // Responsável: escolhe entre os usuários (não administradores) ou digita um nome que não está na lista
+  const responsaveis = db.responsaveis || [];
+  let digitarResp = !!orc.responsavel && !responsaveis.includes(orc.responsavel);
   let pendente = false;
   let estado = novo ? 'Novo — ainda não salvo' : 'Salvo';
 
@@ -2218,7 +2246,6 @@ async function telaEditor(el, id) {
   const funcoesNecessarias = () => {
     const f = new Map();
     for (const it of orc.itens) for (const fn of it.funcoes || []) if (!f.has(fn)) f.set(fn, 1);
-    for (const e of orc.sugestao_ia?.equipe || []) if (e.funcao) f.set(e.funcao, Math.max(f.get(e.funcao) || 0, num(e.quantidade, 1)));
     return [...f.entries()];
   };
 
@@ -2298,12 +2325,6 @@ async function telaEditor(el, id) {
             <div class="j">${esc(it.justificativa)} · estimativa ${it.pessoas} pessoa(s) × ${it.horas}h</div></div>
           <div></div>
         </label>`).join('');
-    const equipe = (s.equipe || []).map((e) => `
-        <div class="ia-item" style="grid-template-columns:minmax(0,1fr) auto">
-          <div><b>${esc(e.funcao)}</b> × ${esc(e.quantidade ?? 1)} <span class="etapa ${e.etapa}">${curtoEtapa(e.etapa)}</span>
-            ${e.observacao ? `<div class="j">${esc(e.observacao)}</div>` : ''}</div>
-          <button class="btn mini" data-acao="escalar" data-funcao="${esc(e.funcao)}">${icone('mais')}Escalar</button>
-        </div>`).join('');
     return `
       <div class="ia-resultado">
         <div>
@@ -2314,7 +2335,6 @@ async function telaEditor(el, id) {
         ${s.aplicada ? `<div class="aviso info">Sugestão de serviços já adicionada ao orçamento. Ajuste as quantidades na lista abaixo.</div>` : `
         <div><h3 style="margin-bottom:8px">Serviços sugeridos</h3><div class="grade" style="gap:6px">${itens}${pers}</div>
           ${!itens && !pers ? '<p class="muted">Nenhum serviço sugerido.</p>' : ''}</div>`}
-        ${equipe ? `<div><h3 style="margin-bottom:8px">Equipe sugerida</h3><div class="grade" style="gap:6px">${equipe}</div></div>` : ''}
         ${s.perguntas?.length ? `<div><h3>Perguntar ao cliente</h3><ul class="ia-lista">${s.perguntas.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}
         ${s.alertas?.length ? `<div class="aviso">${s.alertas.map(esc).join('<br>')}</div>` : ''}
         <div class="acoes">
@@ -2438,7 +2458,13 @@ async function telaEditor(el, id) {
               <label class="campo">Tipo de serviço<input data-orc="tipo_servico" list="tipos" value="${esc(orc.tipo_servico)}"></label>
               <label class="campo">Data do job<input type="date" data-orc="data_evento" value="${esc(orc.data_evento)}"></label>
               <label class="campo">Local / cidade<input data-orc="local" value="${esc(orc.local)}"></label>
-              <label class="campo">Responsável<input data-orc="responsavel" value="${esc(orc.responsavel)}" placeholder="Quem está orçando"></label>
+              <label class="campo">Responsável${responsaveis.length ? `
+                <select data-resp>
+                  <option value="">Selecione…</option>
+                  ${responsaveis.map((n) => `<option ${!digitarResp && n === orc.responsavel ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+                  <option value="__outro" ${digitarResp ? 'selected' : ''}>Outro (digitar)…</option>
+                </select>` : ''}
+                ${!responsaveis.length || digitarResp ? `<input data-orc="responsavel" value="${esc(orc.responsavel)}" placeholder="${responsaveis.length ? 'Digite o nome' : 'Quem está orçando'}"${responsaveis.length ? ' style="margin-top:6px"' : ''}>` : ''}</label>
             </div>
             <datalist id="tipos">${tipos.map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
             <datalist id="lista-clientes">${db.clientes.map((c) => `<option value="${esc(c.nome)}">`).join('')}</datalist>
@@ -2450,7 +2476,7 @@ async function telaEditor(el, id) {
               <textarea data-orc="briefing" rows="4" placeholder="Ex.: Evento corporativo de 1 dia inteiro em Piracicaba, ~200 pessoas, palestras no palco. Querem fotos tratadas, um after movie de 1min30 e 3 reels para o Instagram. Entrega em 7 dias.">${esc(orc.briefing)}</textarea></label>
             <div class="adicionar" style="align-items:center">
               <button class="btn ia" data-acao="ia" id="btn-ia">${icone('brilho')}Sugerir orçamento com IA</button>
-              <span class="small muted">${iaConfigurada ? 'A IA usa o catálogo de serviços, a base de conhecimento e os orçamentos anteriores.' : 'A IA ainda não está configurada — <a href="#/config">configurar</a>.'}</span>
+              <span class="small muted">${iaConfigurada ? 'A IA sugere os serviços (usando o catálogo, a base de conhecimento e os orçamentos anteriores) e preenche nome, tipo, local e data que estiverem em branco.' : 'A IA ainda não está configurada — <a href="#/config">configurar</a>.'}</span>
             </div>
             <div id="ia-res">${sugestaoHTML()}</div>
           </div>
@@ -2639,6 +2665,15 @@ async function telaEditor(el, id) {
   // ---------------------------------------------------------- eventos
   el.addEventListener('input', (e) => {
     const x = e.target;
+    if (x.dataset.resp != null) {
+      digitarResp = x.value === '__outro';
+      orc.responsavel = digitarResp ? '' : x.value;
+      try { localStorage.setItem('chiaro.responsavel', orc.responsavel); } catch { /* ok */ }
+      mudou();
+      render();
+      if (digitarResp) el.querySelector('[data-orc="responsavel"]')?.focus();
+      return;
+    }
     if (x.dataset.orc) {
       const campo = x.dataset.orc;
       orc[campo] = x.type === 'number' ? (x.value === '' ? 0 : num(x.value)) : x.value;
@@ -2725,9 +2760,17 @@ async function telaEditor(el, id) {
       b.innerHTML = '<span class="carregando"></span> Pensando…';
       const res = el.querySelector('#ia-res');
       try {
-        orc.sugestao_ia = await sugerirIA(orc.briefing);
+        const s = await sugerirIA(orc.briefing);
+        orc.sugestao_ia = s;
+        // dados do projeto que a IA tirou do briefing entram só nos campos que estão em branco
+        const preenchidos = [];
+        for (const [campo, valor, nome] of [['projeto', s.projeto, 'nome do projeto'], ['tipo_servico', s.tipo_servico, 'tipo de serviço'],
+          ['local', s.local, 'local'], ['data_evento', s.data, 'data']]) {
+          if (valor && !String(orc[campo] || '').trim()) { orc[campo] = valor; preenchidos.push(nome); }
+        }
         mudou();
         render();
+        if (preenchidos.length) toast(`A IA preencheu ${preenchidos.join(', ')}. Confira os campos no topo.`);
       } catch (err) {
         res.innerHTML = `<div class="aviso" style="margin-top:14px"><b>Não consegui a sugestão.</b><br>${esc(err.message)}<br><a href="#/config">Verificar configuração da IA</a></div>`;
         b.disabled = false;
