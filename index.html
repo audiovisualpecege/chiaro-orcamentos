@@ -366,7 +366,7 @@ a.bh-linha:hover, .bh-linha:hover { background: var(--surface-2); text-decoratio
 <body>
 <div id="raiz"></div>
 <script>
-const VERSAO_GAS = "2026.10.15-1159 (web)";
+const VERSAO_GAS = "2026.10.15-1210 (web)";
 const API_URL = "https://script.google.com/macros/s/AKfycbwwS5gqRm7_v6P9Y-7RjCgyxwcr9Np_yMh7_OkyMee7Qg4CCkDnUh9yQN2p2ohTWE9k/exec";
 
 // armazenamento do navegador pode estar bloqueado dentro do quadro do Google: troca por memória
@@ -399,15 +399,22 @@ function guardarToken(token) {
 
 /** Chama uma função do Codigo.gs (doPost). Texto simples evita a checagem prévia de CORS do navegador. */
 async function rpc(nome, ...args) {
-  let r;
-  try {
-    r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: nome, args }) });
-  } catch {
-    throw new Error('Sem conexão com o servidor. Confira a internet e tente de novo.');
+  // o Google às vezes perde a resposta (404/5xx no redirecionamento): tenta mais duas vezes antes de desistir
+  let ultimo = '';
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    if (tentativa) await new Promise((ok) => setTimeout(ok, 1200 * tentativa));
+    let r;
+    try {
+      r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: nome, args }) });
+    } catch {
+      ultimo = 'Sem conexão com o servidor. Confira a internet e tente de novo.';
+      continue;
+    }
+    if (!r.ok) { ultimo = `O servidor respondeu ${r.status}. Tente de novo em instantes.`; continue; }
+    const txt = await r.text();
+    try { return JSON.parse(txt); } catch { ultimo = 'Resposta inválida do servidor.'; }
   }
-  if (!r.ok) throw new Error(`O servidor respondeu ${r.status}. Tente de novo em instantes.`);
-  const txt = await r.text();
-  try { return JSON.parse(txt); } catch { throw new Error('Resposta inválida do servidor.'); }
+  throw new Error(ultimo);
 }
 
 return { sessao, guardarToken, rpc };
@@ -593,7 +600,7 @@ function formulario(alvo, aviso = '') {
           const r = await rpc('pedirCodigo', email);
           if (!r.ok) throw new Error(r.erro);
           try { localStorage.setItem('chiaro.email', email); } catch { /* ok */ }
-          passoCodigo();
+          passoCodigo(r.aviso || '');
         } catch (err) {
           alvo.querySelector('#l-erro').textContent = err.message;
           b.disabled = false; b.textContent = 'Enviar código';
@@ -617,7 +624,7 @@ function formulario(alvo, aviso = '') {
       alvo.querySelector('#l-codigo').focus();
       alvo.querySelector('#l-trocar').onclick = () => passoEmail();
       alvo.querySelector('#l-reenviar').onclick = async () => {
-        try { const r = await rpc('pedirCodigo', email); if (!r.ok) throw new Error(r.erro); passoCodigo('Código novo enviado.'); } catch (err) { alvo.querySelector('#l-erro').textContent = err.message; }
+        try { const r = await rpc('pedirCodigo', email); if (!r.ok) throw new Error(r.erro); passoCodigo(r.aviso || 'Código novo enviado.'); } catch (err) { alvo.querySelector('#l-erro').textContent = err.message; }
       };
       alvo.querySelector('#f-codigo').onsubmit = async (e) => {
         e.preventDefault();
