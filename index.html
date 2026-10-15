@@ -361,12 +361,38 @@ a.bh-linha:hover, .bh-linha:hover { background: var(--surface-2); text-decoratio
 .login-links { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .carregando-tudo { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
 
+/* ---- abertura: logo animada enquanto o sistema carrega ---- */
+.abertura { background: radial-gradient(circle at 50% 45%, rgba(145, 85, 221, 0.16), transparent 60%), var(--bg); padding: 24px 16px; }
+.ab-centro { display: grid; justify-items: center; gap: 14px; width: min(300px, 100%); }
+.ab-logo { width: min(240px, 70vw); height: auto; overflow: visible; }
+.ab-logo path { transform-box: fill-box; transform-origin: center; }
+.ab-moldura { animation: ab-moldura 0.9s cubic-bezier(.6, 0, .2, 1) both; }
+.ab-letra { animation: ab-letra 0.55s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(0.25s + var(--i) * 0.09s); }
+.ab-o { animation: ab-o 0.8s cubic-bezier(.2, .8, .2, 1.2) 0.75s both, ab-pulso 1.6s ease-in-out 1.6s infinite; }
+.ab-sub { font: 400 11px/1 'Montserrat', var(--font); letter-spacing: .42em; padding-left: .42em; color: var(--muted);
+  animation: ab-sobe 0.6s ease 1.05s both; }
+.ab-barra { position: relative; width: 120px; height: 2px; border-radius: 2px; overflow: hidden; background: rgba(255, 255, 255, .08);
+  animation: ab-sobe 0.5s ease 1.2s both; }
+.ab-barra i { position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 2px; background: linear-gradient(90deg, transparent, #9155DD, transparent);
+  animation: ab-corre 1.1s ease-in-out infinite; }
+.ab-texto { font-size: 12px; color: var(--muted); animation: ab-sobe 0.5s ease 1.3s both; }
+@keyframes ab-moldura { from { clip-path: inset(0 100% 0 0); opacity: .3; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+@keyframes ab-letra { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@keyframes ab-o { from { opacity: 0; transform: scale(.2) rotate(-200deg); } to { opacity: 1; transform: none; } }
+@keyframes ab-pulso { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(145, 85, 221, 0)); }
+  50% { transform: scale(1.07); filter: drop-shadow(0 0 5px rgba(145, 85, 221, .85)); } }
+@keyframes ab-sobe { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes ab-corre { from { left: -40%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .abertura *, .abertura path { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; }
+}
+
 </style>
 </head>
 <body>
 <div id="raiz"></div>
 <script>
-const VERSAO_GAS = "2026.10.15-1509 (web)";
+const VERSAO_GAS = "2026.10.15-1551 (web)";
 const API_URL = "https://script.google.com/macros/s/AKfycbwwS5gqRm7_v6P9Y-7RjCgyxwcr9Np_yMh7_OkyMee7Qg4CCkDnUh9yQN2p2ohTWE9k/exec";
 
 // armazenamento do navegador pode estar bloqueado dentro do quadro do Google: troca por memória
@@ -646,9 +672,47 @@ function formulario(alvo, aviso = '') {
   });
 }
 
+// ---------------------------------------------------------------- abertura (logo animada enquanto carrega)
+// Mesmos desenhos do logo.svg, separados para animar: moldura, letras C H I A R e o "O" roxo.
+const LOGO_ANIMADO = `
+  <svg class="ab-logo" viewBox="-4 -4 184 78" role="img" aria-label="Chiaro">
+    <path class="ab-moldura" d="M0.172296 0H170.487V11.1992H167.041L166.954 11.1131V3.53206H3.70436L3.61821 65.4723L166.954 65.3862V56.8576L167.041 56.7714H170.487V69.0044H0.861478L0.258443 69.0906L0.0861478 69.0044L0 68.3152V8.61478L0.0861478 0.0861478L0.172296 0Z" fill="#fff"/>
+    <path class="ab-letra" style="--i:0" d="M28.8592 15.5065H31.0129L33.6835 15.7649L35.751 16.1957L37.8186 16.8848L39.9723 17.9186L41.3506 18.7801L42.729 19.8139L43.8489 20.7615L44.0212 21.2784L43.0736 22.5706L41.6952 24.6382L41.2645 24.4659L39.8861 23.3459L37.8186 21.9676L36.4402 21.2784L35.2341 20.7615L33.5112 20.2446L31.6159 19.9L30.8406 19.8139H28.17L26.0163 20.1585L24.2072 20.6754L22.6566 21.3645L21.192 22.226L20.3306 22.9152L19.4691 23.6905L18.5215 24.6382L17.66 25.7581L16.7985 27.2226L16.0232 28.8594L15.4201 30.7546L15.0755 32.736L14.9033 34.5452L14.9894 36.182L15.334 38.4218L15.7647 39.9725L16.4539 41.6093L17.2292 42.9876L17.9184 43.9353L18.6938 44.8829L19.4691 45.6582L20.7613 46.6058L22.312 47.5535L23.6903 48.1565L25.241 48.6734L26.9639 49.018L28.4285 49.1903H31.1852L32.9081 48.9318L34.6311 48.5011L36.0095 47.9842L37.474 47.295L39.0246 46.3474L40.4892 45.2275L41.3506 44.4522L42.0398 43.8491L42.5567 43.2461L42.9874 43.3322L43.6766 44.1076L44.2797 44.8829L44.8827 45.5721V45.7444H45.055L45.3134 46.089V46.5197L44.5381 47.4673L43.7628 48.2427L42.8151 49.018L41.7814 49.7933L40.4892 50.6548L38.5078 51.6886L36.4402 52.4639L34.2004 53.0669L31.8744 53.4115L29.9791 53.5838H29.0315L26.4471 53.3254L23.9488 52.8946L21.8812 52.2916L20.0721 51.5163L18.4353 50.6548L16.9708 49.621L15.8509 48.6734L14.6448 47.4673L13.5249 46.0028L12.8357 44.8829L12.0604 43.4184L11.3712 41.6954L10.8543 39.9725L10.4236 37.5603L10.3374 36.8711V32.9945L10.682 30.6685L11.1989 28.6871L11.8881 26.878L12.5773 25.4996L13.0941 24.552L14.0418 23.1736L14.9894 21.9676L15.937 20.9338L16.9708 19.9862L18.3492 18.9524L19.6414 18.0909L21.2782 17.2294L23.2596 16.4541L25.6717 15.8511L27.6531 15.5926L28.8592 15.5065Z" fill="#fff"/>
+    <path class="ab-letra" style="--i:1" d="M48.0702 16.1098L52.6361 16.1959V31.7025H73.8284V18.0912L73.9146 16.1959L74.0007 16.1098L78.4804 16.1959V52.7226L75.896 52.8087H74.0869L73.9146 52.7226L73.8284 51.8611V39.542L73.9146 35.7515H52.6361V52.6364L52.5499 52.7226L49.707 52.8087H48.2425L48.0702 52.6364L47.9841 47.4676V16.1959L48.0702 16.1098Z" fill="#fff"/>
+    <path class="ab-letra" style="--i:2" d="M83.2187 16.1098H84.597L87.7845 16.1959V52.7226L85.2001 52.8087H83.7355L83.2187 52.7226L83.1325 52.5503V16.5405L83.2187 16.1098Z" fill="#fff"/>
+    <path class="ab-letra" style="--i:3" d="M96.1413 16.1098H97.8643L98.4673 17.3158L99.7595 20.1587L101.31 23.5185L102.43 26.0168L103.808 29.0319L105.101 31.8748L106.479 34.89L107.254 36.6129L108.633 39.6281L109.753 42.1264L111.045 44.9693L112.596 48.4152L113.888 51.2581L114.491 52.5503V52.7226L109.753 52.8087L109.322 52.2919L107.771 48.9321L106.393 45.9169L105.101 42.9879L104.928 42.471H96.4859V52.6364L96.3997 52.7226L93.7292 52.8087H92.3508L92.1785 52.7226L92.0923 52.4641V18.1773L92.1785 16.1959L96.1413 16.1098ZM96.3997 22.8293V31.8748L96.4859 32.2194L96.572 38.8528H103.205L102.947 37.9913L96.7443 23.1739L96.3997 22.8293Z" fill="#fff"/>
+    <path class="ab-letra" style="--i:4" d="M102.171 16.1098H117.247L121.382 16.1959L123.536 16.3682L125.431 16.7128L127.499 17.402L129.135 18.2635L130.341 19.1249L131.375 20.0726L132.237 21.2786L133.012 22.7431L133.443 24.0354L133.701 25.2414L133.787 25.8445V28.5151L133.529 30.0657L133.098 31.4441L132.409 32.8224L131.806 33.7701L130.858 34.8038L129.997 35.5792L128.791 36.3545L127.499 36.9575L126.982 37.1298L127.585 38.1636L128.705 39.7143L131.117 43.1602L132.237 44.7108L133.357 46.3477L134.304 47.6399L135.252 49.0182L137.319 51.9473L137.75 52.6364V52.8087H132.495L132.064 52.378L130.944 50.7412L129.825 49.1905L128.618 47.4676L127.585 46.0031L126.379 44.2801L125.259 42.7294L124.225 41.2649L123.019 39.542L122.071 38.1636L121.899 38.0775L111.82 37.9913L111.217 36.7852L110.183 34.3731V34.0285H121.64L123.45 33.7701L124.656 33.4255L125.689 32.9947L126.723 32.3917L127.585 31.6164L128.36 30.5826L128.791 29.2904L129.049 27.912V26.6198L128.791 25.1553L128.36 24.0354L127.843 23.1739L127.154 22.3986L126.292 21.7955L125.086 21.1925L123.536 20.7617L121.899 20.5033L120.693 20.4172H103.98L103.636 20.0726L102.171 16.4544V16.1098Z" fill="#fff"/>
+    <path class="ab-o" d="M155.927 15.5065H157.564L160.235 15.7649L162.13 16.1957L164.456 16.971L166.265 17.8325L167.816 18.7801L168.85 19.5554L169.797 20.3308L171.606 22.1399L172.468 23.2598L173.415 24.7243L174.191 26.1888L174.966 28.1702L175.483 29.9793L175.828 31.6161L176 32.9083V35.8374L175.483 38.9387L174.88 41.0924L174.018 43.2461L173.243 44.7106L172.123 46.3474L171.348 47.295L170.745 47.8981L170.4 48.3288L169.711 48.9318L168.419 49.9656L167.041 50.8271L165.231 51.7747L163.422 52.4639L161.096 53.0669L158.856 53.4115L156.617 53.5838L154.204 53.4115L152.137 53.0669L150.328 52.6362L147.83 51.6886L145.934 50.6548L144.47 49.621L143.35 48.6734L142.058 47.3812L141.11 46.1751L140.249 44.969L139.387 43.4184L138.526 41.2647L138.095 39.8863L137.664 37.9911L137.406 36.182V35.1482L137.32 34.8897V33.856L137.578 31.2715L138.009 29.2901L138.698 27.2226L139.818 24.8966L141.196 22.829L142.23 21.623L143.694 20.1585L144.901 19.2108L146.193 18.3494L147.743 17.4879L149.294 16.7987L151.103 16.1957L153.171 15.7649L154.635 15.5926L155.927 15.5065ZM155.324 19.7277L153.601 19.9862L151.878 20.4169L150.242 21.0199L148.777 21.7953L147.571 22.6568L146.451 23.6044L145.676 24.3797L144.814 25.4996L144.039 26.7057L143.091 28.6871L142.488 30.5824L142.144 32.736L142.058 33.5114V35.1482L142.144 36.4404L142.575 38.6802L143.264 40.7478L144.039 42.3846L144.814 43.5907L145.504 44.4522L146.71 45.7444L147.916 46.692L149.466 47.6396L151.275 48.415L152.998 48.9318L154.549 49.1903L155.324 49.2764H158.167L159.89 49.018L161.785 48.5011L163.164 47.9842L164.628 47.2089L166.093 46.1751L167.213 45.1413L167.816 44.5383L168.763 43.2461L169.625 41.7816L170.4 39.8002L170.917 37.7326L171.176 36.0958L171.262 35.062V33.5975L170.917 31.0992L170.486 29.4624L169.97 28.0841L169.108 26.3611L168.333 25.2412L167.557 24.2936L166.524 23.2598L165.059 22.1399L163.681 21.3645L162.389 20.7615L160.838 20.2446L158.684 19.8139L157.909 19.7277H155.324Z" fill="#9155DD"/>
+  </svg>`;
+
+let inicioAbertura = 0;
+
+/** Tela de abertura com a logo animada. Se já estiver na tela, só troca o texto (a animação não recomeça). */
+function telaCarregando(raiz, texto = 'Carregando os dados…') {
+  const ja = raiz.querySelector('.abertura');
+  if (ja) { ja.querySelector('.ab-texto').textContent = texto; return; }
+  inicioAbertura = Date.now();
+  raiz.innerHTML = `
+    <div class="carregando-tudo abertura" role="status">
+      <div class="ab-centro">
+        ${LOGO_ANIMADO}
+        <div class="ab-sub">ORÇAMENTOS</div>
+        <div class="ab-barra"><i></i></div>
+        <div class="ab-texto">${esc(texto)}</div>
+      </div>
+    </div>`;
+}
+
+/** Deixa a entrada da logo terminar (no máximo ~1,6 s desde que apareceu) antes de mostrar o sistema. */
+function esperarAbertura() {
+  const falta = 1600 - (Date.now() - inicioAbertura);
+  return falta > 0 ? new Promise((ok) => setTimeout(ok, falta)) : Promise.resolve();
+}
+
 /** Antes de abrir o sistema: confere a sessão guardada ou pede o login. */
 async function garantirLogin(raiz) {
   if (sessao.token) {
+    telaCarregando(raiz, 'Abrindo…');
     try {
       const r = await rpc('quemSou', sessao.token);
       if (r.ok) { sessao.usuario = r.usuario; return true; }
@@ -679,7 +743,7 @@ async function sair() {
   location.reload();
 }
 
-return { usuarioAtual, ehAdmin, garantirLogin, expirou, sair };
+return { usuarioAtual, ehAdmin, telaCarregando, esperarAbertura, garantirLogin, expirou, sair };
 })();
 // ===== api.js =====
 __m['api'] = (function () {
@@ -858,6 +922,92 @@ function itemLivre({ nome = 'Item personalizado', etapa = 'prod', pessoas = 1, h
 }
 
 return { arred10, calcItem, calcOrcamento, valorHora, INTERNO, custoAlocacao, precoServico, itemDeServico, itemLivre };
+})();
+// ===== copia_drive.js =====
+__m['copia_drive'] = (function () {
+'use strict';
+const { pedir } = __m['api'];
+const { toast } = __m['util'];
+// Cópia de segurança da proposta comercial no Drive (só na versão online).
+// O PDF que a pessoa salva sai da janela de impressão, que o sistema não alcança; então, logo depois,
+// o navegador fotografa cada página A4 da proposta (igual ao impresso) e manda um PDF ao servidor.
+
+
+
+const LIBS = [
+  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+];
+
+// mesmas regras do @media print da proposta, aplicadas à cópia fotografada
+const CSS_COPIA = `
+  .pc-copia { position: fixed; left: -12000px; top: 0; zoom: 1 !important; }
+  .pc-copia .no-print { display: none !important; }
+  .pc-copia .pc-folha { margin: 0 !important; box-shadow: none !important; }
+  .pc-copia .b { box-shadow: none !important; background: none !important; }
+  .pc-copia .b:empty { display: none; }`;
+
+let carregando = null;
+function carregarLibs() {
+  carregando ||= Promise.all(LIBS.map((src) => new Promise((ok, falha) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = ok;
+    s.onerror = () => falha(new Error('não consegui carregar o gerador de PDF'));
+    document.head.appendChild(s);
+  }))).catch((e) => { carregando = null; throw e; });
+  return carregando;
+}
+
+/** Monta o PDF (uma imagem JPEG por página A4) a partir do .pc-doc da tela. */
+async function gerarPdf(doc) {
+  await carregarLibs();
+  await document.fonts?.ready;
+  const estilo = document.createElement('style');
+  estilo.textContent = CSS_COPIA;
+  const copia = doc.cloneNode(true);
+  copia.classList.add('pc-copia');
+  copia.style.zoom = '1';
+  copia.querySelectorAll('[contenteditable]').forEach((x) => x.removeAttribute('contenteditable'));
+  // o html2canvas não entende object-fit: as fotos viram fundo com background-size: cover
+  copia.querySelectorAll('.pc-fecho img').forEach((img) => {
+    const d = document.createElement('div');
+    d.className = img.className;
+    d.style.cssText = `position:absolute;border-radius:3.7mm;background:url("${img.src}") center/cover no-repeat`;
+    img.replaceWith(d);
+  });
+  doc.parentNode.appendChild(estilo);
+  doc.parentNode.appendChild(copia);
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    const folhas = [...copia.querySelectorAll('.pc-folha')];
+    for (let i = 0; i < folhas.length; i++) {
+      const tela = await window.html2canvas(folhas[i], { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false });
+      if (i) pdf.addPage('a4', 'portrait');
+      pdf.addImage(tela.toDataURL('image/jpeg', 0.86), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    }
+    return pdf.output('datauristring');
+  } finally {
+    copia.remove();
+    estilo.remove();
+  }
+}
+
+/** Gera e envia a cópia sem travar a tela; avisa no fim (ou se der errado). */
+async function salvarCopiaDrive(doc, nome, orc) {
+  if (!doc) return;
+  toast('Salvando uma cópia da proposta no Drive…');
+  try {
+    const pdf = await gerarPdf(doc);
+    await pedir('POST', '/api/drive/proposta', { pdf, nome, numero: orc.numero || '', orcamento_id: orc.id });
+    toast('Cópia da proposta salva no Drive da Chiaro.');
+  } catch (e) {
+    toast(`Não consegui salvar a cópia no Drive (${e.message}). O seu PDF não foi afetado.`, true);
+  }
+}
+
+return { salvarCopiaDrive };
 })();
 // ===== dados.js =====
 __m['dados'] = (function () {
@@ -1102,12 +1252,14 @@ return { telaClientes };
 __m['telas/comercial'] = (function () {
 'use strict';
 const { db, salvar } = __m['api'];
+const { salvarCopiaDrive } = __m['copia_drive'];
 const { calcOrcamento } = __m['calc'];
 const { brl, confirmar, debounce, esc, GANHOS, icone, num, proximaEtapa, saida, toast, uid } = __m['util'];
 // Proposta comercial no padrão Chiaro (A4 em pé). Capa e página "Como trabalhamos" são desenhadas em vetor
 // (só as fotos são JPEG); o miolo é gerado a partir do orçamento e editado como um documento, que se
 // divide sozinho em páginas. O conteúdo fica salvo no orçamento (campo proposta_comercial).
 // O PDF é gerado pelo servidor (Edge/Chrome sem janela), com texto e vetores reais: arquivo leve e nítido.
+
 
 
 
@@ -1691,6 +1843,7 @@ function telaComercial(raiz, id) {
       document.title = nomeArquivo();
       window.print();
       document.title = titulo;
+      salvarCopiaDrive(raiz.querySelector('.pc-doc'), nomeArquivo(), orc); // backup no Drive, em segundo plano
     } catch (err) {
       toast(err.message, true);
     } finally {
@@ -3487,7 +3640,7 @@ return { telaUsuarios };
 __m['main'] = (function () {
 'use strict';
 const { carregarTudo } = __m['api'];
-const { ehAdmin, garantirLogin, sair, usuarioAtual } = __m['login'];
+const { ehAdmin, esperarAbertura, garantirLogin, sair, telaCarregando, usuarioAtual } = __m['login'];
 const { telaUsuarios } = __m['telas/usuarios'];
 const { esc, icone, saida, toast } = __m['util'];
 const { telaOrcamentos } = __m['telas/orcamentos'];
@@ -3606,8 +3759,9 @@ async function rotear({ manterRolagem = false } = {}) {
 async function iniciar() {
   await garantirLogin(raiz);
   try {
-    raiz.innerHTML = '<div class="carregando-tudo"><span class="carregando"></span> Carregando os dados…</div>';
+    telaCarregando(raiz);
     await carregarTudo();
+    await esperarAbertura();
     versao = VERSAO_GAS;
   } catch (e) {
     raiz.innerHTML = `<div class="main"><div class="card"><h2>Não consegui falar com o servidor</h2>
