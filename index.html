@@ -366,16 +366,16 @@ a.bh-linha:hover, .bh-linha:hover { background: var(--surface-2); text-decoratio
 .ab-centro { display: grid; justify-items: center; gap: 14px; width: min(300px, 100%); }
 .ab-logo { width: min(240px, 70vw); height: auto; overflow: visible; }
 .ab-logo path { transform-box: fill-box; transform-origin: center; }
-.ab-moldura { animation: ab-moldura 0.9s cubic-bezier(.6, 0, .2, 1) both; }
-.ab-letra { animation: ab-letra 0.55s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(0.25s + var(--i) * 0.09s); }
-.ab-o { animation: ab-o 0.8s cubic-bezier(.2, .8, .2, 1.2) 0.75s both, ab-pulso 1.6s ease-in-out 1.6s infinite; }
+.ab-moldura { animation: ab-moldura 0.7s cubic-bezier(.6, 0, .2, 1) both; }
+.ab-letra { animation: ab-letra 0.45s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(0.15s + var(--i) * 0.07s); }
+.ab-o { animation: ab-o 0.65s cubic-bezier(.2, .8, .2, 1.2) 0.5s both, ab-pulso 1.6s ease-in-out 1.2s infinite; }
 .ab-sub { font: 400 11px/1 'Montserrat', var(--font); letter-spacing: .42em; padding-left: .42em; color: var(--muted);
-  animation: ab-sobe 0.6s ease 1.05s both; }
+  animation: ab-sobe 0.5s ease 0.75s both; }
 .ab-barra { position: relative; width: 120px; height: 2px; border-radius: 2px; overflow: hidden; background: rgba(255, 255, 255, .08);
-  animation: ab-sobe 0.5s ease 1.2s both; }
+  animation: ab-sobe 0.5s ease 0.85s both; }
 .ab-barra i { position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 2px; background: linear-gradient(90deg, transparent, #9155DD, transparent);
   animation: ab-corre 1.1s ease-in-out infinite; }
-.ab-texto { font-size: 12px; color: var(--muted); animation: ab-sobe 0.5s ease 1.3s both; }
+.ab-texto { font-size: 12px; color: var(--muted); animation: ab-sobe 0.5s ease 0.95s both; }
 @keyframes ab-moldura { from { clip-path: inset(0 100% 0 0); opacity: .3; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
 @keyframes ab-letra { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
 @keyframes ab-o { from { opacity: 0; transform: scale(.2) rotate(-200deg); } to { opacity: 1; transform: none; } }
@@ -392,7 +392,7 @@ a.bh-linha:hover, .bh-linha:hover { background: var(--surface-2); text-decoratio
 <body>
 <div id="raiz"></div>
 <script>
-const VERSAO_GAS = "2026.10.15-1551 (web)";
+const VERSAO_GAS = "2026.10.16-1050 (web)";
 const API_URL = "https://script.google.com/macros/s/AKfycbwwS5gqRm7_v6P9Y-7RjCgyxwcr9Np_yMh7_OkyMee7Qg4CCkDnUh9yQN2p2ohTWE9k/exec";
 
 // armazenamento do navegador pode estar bloqueado dentro do quadro do Google: troca por memória
@@ -703,9 +703,9 @@ function telaCarregando(raiz, texto = 'Carregando os dados…') {
     </div>`;
 }
 
-/** Deixa a entrada da logo terminar (no máximo ~1,6 s desde que apareceu) antes de mostrar o sistema. */
+/** Deixa a entrada da logo terminar (no máximo ~1,2 s desde que apareceu) antes de mostrar o sistema. */
 function esperarAbertura() {
-  const falta = 1600 - (Date.now() - inicioAbertura);
+  const falta = 1200 - (Date.now() - inicioAbertura);
   return falta > 0 ? new Promise((ok) => setTimeout(ok, falta)) : Promise.resolve();
 }
 
@@ -714,8 +714,13 @@ async function garantirLogin(raiz) {
   if (sessao.token) {
     telaCarregando(raiz, 'Abrindo…');
     try {
-      const r = await rpc('quemSou', sessao.token);
-      if (r.ok) { sessao.usuario = r.usuario; return true; }
+      // confere a sessão e já traz os dados (uma ida ao servidor em vez de duas)
+      const r = await rpc('api', sessao.token, 'GET', '/api/tudo', '');
+      if (r.status === 200 && r.dados) {
+        sessao.usuario = r.dados.eu || (await rpc('quemSou', sessao.token)).usuario;
+        sessao.tudo = r.dados;
+        return true;
+      }
     } catch { /* cai no login */ }
     guardarToken('');
   }
@@ -765,8 +770,10 @@ const pedir = req;
 
 const db = { config: null, servicos: [], pessoas: [], orcamentos: [], clientes: [], historico: [], responsaveis: [] };
 
-async function carregarTudo() {
-  const t = await req('GET', '/api/tudo');
+/** Na entrada, usa os dados que vieram junto com a conferência da sessão (login.js); "Atualizar dados" pede leitura nova. */
+async function carregarTudo(fresco = false) {
+  const t = (!fresco && sessao.tudo) || await req('GET', fresco ? '/api/tudo/fresco' : '/api/tudo');
+  sessao.tudo = null;
   Object.assign(db, {
     config: t.config, servicos: t.servicos || [], pessoas: t.pessoas || [], orcamentos: t.orcamentos || [],
     clientes: t.clientes || [], historico: t.historico || [], responsaveis: t.responsaveis || [],
@@ -3712,7 +3719,7 @@ async function atualizar() {
   document.querySelectorAll('[data-atualizar]').forEach((b) => b.classList.add('girando'));
   try {
     await salvarPendente();
-    await carregarTudo();
+    await carregarTudo(true);
     await rotear({ manterRolagem: true });
     window.scrollTo(0, y);
     toast('Dados atualizados.');
